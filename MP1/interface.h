@@ -61,7 +61,7 @@ struct Reply
     union {
         // Below structure is only for the "JOIN <chatroom name>" command
         struct {
-            // # of members that have been joined the chatroom
+            // # of members that have joined the chatroom
             int num_member;
             // port number to join the chatroom
             int port;        

@@ -1,20 +1,24 @@
+#include <arpa/inet.h>
+
 #include <netdb.h>
 #include <netinet/in.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/time.h>
 
+#include <string>
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "interface.h"
 
+using namespace std;
 
-/*
- * TODO: IMPLEMENT BELOW THREE FUNCTIONS
- */
 int connect_to(const char *host, const int port);
+
 struct Reply process_command(const int sockfd, char* command);
+
 void process_chatmode(const char* host, const int port);
 
 int main(int argc, char** argv) 
@@ -25,26 +29,33 @@ int main(int argc, char** argv)
 		exit(1);
 	}
 
-    display_title();
-    
-	while (1) {
+	while (1)
+	{
+    	display_title();
 	
-		int sockfd = connect_to(argv[1], atoi(argv[2]));
-    
-		char command[MAX_DATA];
-        get_command(command, MAX_DATA);
-
-		struct Reply reply = process_command(sockfd, command);
-		display_reply(command, reply);
+		while (1) {
 		
-		touppercase(command, strlen(command) - 1);
-		if (strncmp(command, "JOIN", 4) == 0) {
-			printf("Now you are in the chatmode\n");
-			process_chatmode(argv[1], reply.port);
-		}
+			int sockfd = connect_to(argv[1], atoi(argv[2]));
 	
-		close(sockfd);
-    }
+			char command[MAX_DATA];
+    	    get_command(command, MAX_DATA);
+
+			struct Reply reply = process_command(sockfd, command);
+			display_reply(command, reply);
+
+			if (reply.status == SUCCESS)
+			{
+				touppercase(command, strlen(command) - 1);
+				if (strncmp(command, "JOIN", 4) == 0) {
+					printf("Now you are in the chatmode\n");
+					process_chatmode(argv[1], reply.port);
+					break;
+				}
+			}
+
+			close(sockfd);
+    	}
+	}
 
     return 0;
 }
@@ -68,9 +79,35 @@ int connect_to(const char *host, const int port)
 	// Finally, you should return the socket fildescriptor
 	// so that other functions such as "process_command" can use it
 	// ------------------------------------------------------------
+	struct sockaddr_in server_addr;
+	memset((char*) &server_addr, 0, sizeof(struct sockaddr_in));
 
-    // below is just dummy code for compilation, remove it.
-	int sockfd = -1;
+	int sockfd;
+	
+	// Create socket
+	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
+	{
+  		fprintf(stderr, "\nERROR: could not open socket");
+		exit(EXIT_FAILURE);
+	}
+	
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_port = htons(port);
+
+	// convert host address from string to decimal format and store in the server_addr struct
+	if(inet_aton(host, &server_addr.sin_addr) == 0)
+	{
+		fprintf(stderr, "\nERROR: invalid host address");
+		exit(EXIT_FAILURE);
+	}
+
+	// connect to host on the specified port using the server_addr struct
+	if (connect(sockfd, (struct sockaddr*) &server_addr, sizeof(server_addr)) < 0)
+	{
+    	fprintf(stderr, "\nERROR: could not connect to server");
+		exit(EXIT_FAILURE);
+	}
+	
 	return sockfd;
 }
 
@@ -103,7 +140,13 @@ struct Reply process_command(const int sockfd, char* command)
 	// 
 	// - CREATE/DELETE/JOIN and "<name>" are separated by one space.
 	// ------------------------------------------------------------
-
+	
+	// Send the command to the server
+	if (send(sockfd, command, MAX_DATA, 0) < 0)
+	{
+    	fprintf(stderr, "\nERROR: send failed");
+		exit(EXIT_FAILURE);		
+	}
 
 	// ------------------------------------------------------------
 	// GUIDE 2:
@@ -111,6 +154,13 @@ struct Reply process_command(const int sockfd, char* command)
 	// server and receive a result from the server.
 	// ------------------------------------------------------------
 
+	// Receive response from server
+	char response_string[MAX_DATA];
+	if (recv(sockfd, response_string, MAX_DATA, 0) < 0)
+	{
+    	fprintf(stderr, "\nERROR: receive failed");
+		exit(EXIT_FAILURE);		
+	}
 
 	// ------------------------------------------------------------
 	// GUIDE 3:
@@ -154,12 +204,7 @@ struct Reply process_command(const int sockfd, char* command)
     // as "r1,r2,r3,"
 	// ------------------------------------------------------------
 
-	// REMOVE below code and write your own Reply.
-	struct Reply reply;
-	reply.status = SUCCESS;
-	reply.num_member = 5;
-	reply.port = 1024;
-	return reply;
+	return *(Reply*) response_string;
 }
 
 /* 
@@ -177,6 +222,9 @@ void process_chatmode(const char* host, const int port)
 	// You may re-use the function "connect_to".
 	// ------------------------------------------------------------
 
+	// Connect to chatroom
+	int sockfd = connect_to(host, port);
+
 	// ------------------------------------------------------------
 	// GUIDE 2:
 	// Once the client have been connected to the server, we need
@@ -184,6 +232,43 @@ void process_chatmode(const char* host, const int port)
 	// At the same time, the client should wait for a message from
 	// the server.
 	// ------------------------------------------------------------
+
+	fd_set readfds;
+	char buf[MAX_DATA];
+
+	while(true)
+	{
+		// Listen for new information on socket or new input from user
+		FD_ZERO(&readfds);
+  		FD_SET(sockfd, &readfds);
+  		FD_SET (STDIN_FILENO, &readfds);
+
+		select(sockfd + 1, &readfds, NULL, NULL, NULL);
+
+		// If there is information to read from the socket
+		if (FD_ISSET(sockfd, &readfds))
+      	{
+			if (read(sockfd, &buf, MAX_DATA) <= 0)
+			{
+				// If the information is empty for could not be read, disconnect from the chatroom and continue
+				printf("Chatroom disconnected...\n");
+				close(sockfd);
+				break;
+			}
+			else
+			{
+				// Otherwise, display the message
+				display_message(buf);
+				printf("\n");
+			}
+		}
+		else
+		{
+			// If there is new input from the user, collect the message and send it to the chatroom server
+			get_message(buf, MAX_DATA);
+    		send(sockfd, buf, MAX_DATA, 0);
+		}
+	}
 	
     // ------------------------------------------------------------
     // IMPORTANT NOTICE:
@@ -200,4 +285,3 @@ void process_chatmode(const char* host, const int port)
     //    terminate the client program by pressing CTRL-C (SIGINT)
 	// ------------------------------------------------------------
 }
-
