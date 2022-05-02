@@ -1,0 +1,74 @@
+// This file is to defile rpc for Coordinator Server to communicate with Others (Clients, Other Servers)
+
+syntax = "proto3";
+
+package csce438;
+
+import "google/protobuf/timestamp.proto";
+
+// The messenger service definition.
+service SNSCoordinator{
+
+  rpc coordLogin (coordRequest) returns (coordReply) {}
+  
+  rpc Heartbeat (stream coordMessage) returns (stream coordMessage) {} 
+  
+  rpc GetSlaveInfo (masterRequest) returns (masterReply) {}
+  
+  rpc FillFollowerSyncRT (followerSyncRTInfo) returns (syncIdInfo) {}
+  
+  rpc GetFollowerSyncInfo (clientInfo) returns (followerSyncInfo) {}
+  
+  rpc GetClusterInfo (syncIdInfo) returns (clusterInfo) {}
+}
+
+message coordRequest {
+    string client_id = 1;
+}
+
+// Reply from Coordinator is available server for user to connect to
+// Combination of IP address and Port Number
+message coordReply {
+    string server_ip = 1;
+    string server_port = 2;
+}
+
+message coordMessage {
+  string server_ip = 1;
+  string server_port = 2;
+  string status = 3;
+  string server_type = 4;
+}
+
+message masterRequest {
+  string server_id = 1;
+}
+
+message masterReply {
+  string slave_ip = 1;
+  string slave_port = 2;
+}
+
+message followerSyncRTInfo {
+  string sync_ip = 1;
+  string sync_port = 2;
+  string sync_id = 3;
+}
+
+message clientInfo {
+  string client_id = 1;
+}
+
+message followerSyncInfo {
+  string sync_ip = 1;
+  string sync_port = 2;
+  string sync_id = 3;
+}
+
+message syncIdInfo {
+  string sync_id = 1;
+}
+
+message clusterInfo {
+  repeated string cluster_clients = 1;
+}

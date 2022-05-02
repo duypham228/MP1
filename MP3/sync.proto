@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package csce438;
+
+import "google/protobuf/timestamp.proto";
+
+// The messenger service definition.
+service SNSSynchronizer{
+  rpc InformFollow (followRequest) returns (followReply) {}
+  
+  rpc InformTimeline (stream syncMessage) returns (stream syncMessage) {}
+  
+  rpc AskForClients (clientRequest) returns (clientReply) {}
+}
+
+message followRequest {
+  string username = 1;
+  string follower = 2;
+}
+
+message followReply {
+  string msg = 1;
+}
+
+message clientRequest {
+  string server_request_id = 1;
+  string server_reply_id = 2;
+}
+
+message clientReply {
+  repeated string clients = 1;
+}
+
+message syncMessage {
+  string username = 1;
+  string msg = 2;
+  repeated string followers = 3;
+}
